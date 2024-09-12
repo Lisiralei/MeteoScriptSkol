@@ -2,6 +2,7 @@ import asyncio
 import sys
 
 from script import meteo_data_collector
+from xls_writer import write_data_to_xls
 
 
 def main():
