@@ -10,7 +10,7 @@ from database import Base, MeteoData
 from utils import hectopascal_to_mercury_mm, get_WMO_weather_type
 
 try:
-    import secrets_example as secrets
+    import secrets
 except ImportError:
     import secrets_example as secrets
 
