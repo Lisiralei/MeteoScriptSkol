@@ -3,27 +3,30 @@ from datetime import datetime
 
 import sqlalchemy as alch
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine
+
 
 import requests
 
 from database import Base, MeteoData
 from utils import hectopascal_to_mercury_mm, get_WMO_weather_type
 
-try:
-    import secrets
-except ImportError:
-    import secrets_example as secrets
 
+async def init_db() -> (AsyncEngine, AsyncSession):
+    engine_obj = create_async_engine(
+        f"sqlite+aiosqlite:///meteo_data.db",
+        pool_pre_ping=True
+    )
+    async with engine_obj.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-engine = alch.engine.create_engine(
-    f"sqlite:///meteo_data.db",
-    pool_pre_ping=True
-)
-Base.metadata.create_all(engine)
+    Session = async_sessionmaker(engine_obj, class_=AsyncSession)
 
-Session = sessionmaker(bind=engine)
+    session_obj = Session()
 
-session = Session()
+    return engine_obj, session_obj
+
 
 data_provider_url = "https://api.open-meteo.com/v1/forecast"
 
@@ -63,26 +66,28 @@ async def request_function() -> MeteoData or None:
     return
 
 
-async def data_collection_routine(run_delay: int) -> None:
+async def data_collection_routine(session: AsyncSession, run_delay: int) -> None:
     data_collected = await request_function()
     if data_collected:
-        print(data_collected)
-        session.add(data_collected)
-        session.commit()
+        async with session.begin():
+            session.add(data_collected)
+            await session.commit()
 
     await asyncio.sleep(run_delay)
 
 
 async def meteo_data_collector(run_delay: int, times_to_run: int = 0) -> None:
+    engine, session = await init_db()
+
     times_to_run = int(times_to_run)
     run_delay = int(run_delay)
     if times_to_run:
         for i in range(times_to_run):
-            await data_collection_routine(run_delay)
+            await data_collection_routine(session, run_delay)
 
     else:  # Assume infinite run amount
         while True:
-            await data_collection_routine(run_delay)
+            await data_collection_routine(session, run_delay)
 
 
 
